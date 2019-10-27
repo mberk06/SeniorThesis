@@ -15,6 +15,7 @@ from tabulate import tabulate
 
 PATH = '/Users/michaelberk/documents/Penn 2019-2020/Senior Thesis/Data/'
 SPATH = 'file:///Users/michaelberk/documents/Penn 2019-2020/Senior Thesis/Scripts/'
+FILENAME = 'uniqueReefs'
 
 ######################### helpers ###########################
 class helpers():
@@ -103,6 +104,15 @@ class helpers():
 
 		return df
 
+	#Purpose: write to csv
+	#Params: df 
+	#Return: NA
+	def saveAsCSV(self, df):
+		f = open(FILENAME+'.csv','w')
+		f.write(df.to_csv(index=True))
+
+		print("File saved as: "+FILENAME+".csv")
+
 ############################# testing ###########################
 class testing():
 	def __init__(self):
@@ -149,6 +159,9 @@ data = h.readData(csv=True)
 
 #merge data
 df = h.mergeData(data)
+
+#save as csv
+h.saveAsCSV(df)
 
 #visualize
 h.showDF(df.iloc[1:1000,], how='pivot')
