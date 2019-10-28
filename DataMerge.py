@@ -106,12 +106,15 @@ class helpers():
 
 	#Purpose: write to csv
 	#Params: df 
-	#Return: NA
+	#Return: df datatypes (to be accessed by TrendAnalysis.py)
 	def saveAsCSV(self, df):
 		f = open(FILENAME+'.csv','w')
 		f.write(df.to_csv(index=True))
+		f.close()
 
 		print("File saved as: "+FILENAME+".csv")
+
+		return df.dtypes
 
 ############################# testing ###########################
 class testing():
@@ -150,26 +153,34 @@ class testing():
 
 
 ############################# run ###########################
-#create class instances
-h = helpers()
-t = testing()
+class run():
 
-#read in data
-data = h.readData(csv=True)
+	#Purpose: run file (to be called from TrendAnalysis.py
+	#Params: NA 
+	#Return: NA
+	def runIt(self, howShowData=None):
+		#create class instances
+		h = helpers()
+		t = testing()
 
-#merge data
-df = h.mergeData(data)
+		#read in data
+		data = h.readData(csv=True)
 
-#save as csv
-h.saveAsCSV(df)
+		#merge data
+		df = h.mergeData(data)
 
-#visualize
-h.showDF(df.iloc[1:1000,], how='pivot')
+		#save as csv
+		h.saveAsCSV(df)
 
-#Time of day work began, Time of day work ended
-#run tests
-t.testDataMerge(data,df)
+		#visualize
+		if howShowData is not None:
+			h.showDF(df.iloc[1:1000,], how=howShowData)
 
+		#run tests
+		t.testDataMerge(data,df)
+
+		#return df
+		return df
 
 
 
