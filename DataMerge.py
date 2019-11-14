@@ -12,7 +12,6 @@ import webbrowser
 from pivottablejs import pivot_ui #create js file for visualization
 from tabulate import tabulate
 
-
 PATH = '/Users/michaelberk/documents/Penn 2019-2020/Senior Thesis/Data/'
 SPATH = 'file:///Users/michaelberk/documents/Penn 2019-2020/Senior Thesis/Scripts/'
 FILENAME = 'uniqueReefs'
@@ -68,6 +67,10 @@ class helpers():
 		static = data[1]
 		nonstatic = data[2].drop_duplicates(['Reef ID','Date','Depth'])
 
+		#standardize organism codes
+		belt['Organism Code'] = [o.strip().upper() for o in belt['Organism Code']]
+		belt['Organism Code']['HAEMULIDAE'] = 'GRUNTS'
+
 		#sum all values for transects
 		belt['Count'] = belt['S1']+belt['S2']+belt['S3']+belt['S4'] 
 		#nonUnique = belt[belt.duplicated(['Reef ID','Date','Depth','Organism Code'])] #check if there are duplciates before pivot
@@ -88,16 +91,14 @@ class helpers():
 	#Params: dirty df
 	#Return: cleaned DB
 	def cleanData(self, df):
-		#recode to NA 
-		df.replace(np.nan, 'NA', regex=True)
-		df.replace('nan', 'NA', regex=True)
-		df.replace('', 'NA', regex=True)
-		
 		#remove Time of day work began, Time of day work ended (all the same value)
-		df.drop(['Time of day work began', 'Time of day work ended'], axis=1)
+		df = df.drop(['Time of day work began', 'Time of day work ended'], axis=1)
 
 		#tunc columns with more than 100 chars
 		#df = df.applymap(lambda c: c[:100] if isinstance(c, str) else c)
+
+		#make uppercase
+		df = df.apply(lambda x: x.astype(str).str.upper())
 
 		#strip whitespace if string
 		df = df.applymap(lambda c: c.strip() if isinstance(c, str) else c)
