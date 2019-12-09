@@ -12,6 +12,11 @@ import plotly.graph_objs as go
 import plotly.express as px
 import plotly.figure_factory as ff
 
+from scipy.stats.mstats import normaltest 
+from scipy import stats
+from itertools import combinations # tuple permutations
+import statsmodels.stats.multitest as multi
+
 ######################### variables #######################
 #types of columns
 DISEASES = ['ASPERGILLOSIS','BLACK BAND','WHITE BAND','WHITE PLAGUE']
@@ -93,13 +98,17 @@ DIVE_DESCRIPTORS = ['Depth','Time of day work began','Time of day work ended','W
 					'Any major storms in last years?','When storms?','Overall anthro impact?',
 					'What kind of impacts?']
 
+COMMON_COLUMNS = ['TRASH GENERAL','GROUPER TOTAL','SNAPPER','PENCIL URCHIN','PARROTFISH',
+				  'MORAY EEL','LOBSTER','CORAL DAMAGE OTHER','BUTTERFLYFISH']
 
-#TODO break down into categorical and numeric variables
-
-######################### helpers ###########################
-class helpers():
+######################### cleaning class ###########################
+class cleaning():
 	def __init__(self):
-		print("Class 'helpers' created")
+		print("Class 'cleaning' created")
+
+		#setup for printing
+		pd.set_option('display.max_rows', 500)
+		pd.set_option('display.max_columns', 500)
 
     #Purpose: read in data from dm
     #Params: NA 
@@ -112,6 +121,9 @@ class helpers():
     #Params: df 
     #Return: clean df 
 	def clean(self, df):
+		#remove errors
+		df = df[df['Errors?'] != 'VERDADERO']
+		
 		#recode to NA
 		df = df.replace([np.nan, 'nan', 'NAN', float('nan')], 'NA', regex=True)
 
@@ -134,54 +146,167 @@ class helpers():
 			df[c] = df[c].apply(lambda x: str(x).replace('%',''))
 
 		#columns to convert to numeric
-		colsToFloat = ['TRASH GENERAL','TRASH FISH NETS','CORAL DAMAGE OTHER','CORAL DAMAGE DYNAMITE','CORAL DAMAGE ANCHOR','Percent colonies bleached','Percent Bleaching','Percent of each colony']
+		colsToFloat = ['TRASH GENERAL','TRASH FISH NETS','CORAL DAMAGE OTHER','CORAL DAMAGE DYNAMITE',
+					   'CORAL DAMAGE ANCHOR','Percent colonies bleached','Percent Bleaching',
+					   'Percent of each colony']+ALL_ORGANISMS
 		for c in colsToFloat:
 			df[c] = pd.to_numeric(df[c], errors='coerce') #convert NA to NaN
 			df[c] = df[c].apply(lambda x : x*100 if x < 1 and x != 0 else x) #change decimals to percentages
+			df[c] = df[c].apply(lambda x : x/10 if x > 100 else x) #change decimals to percentages
 
-		#remove errors
 		return df
 
+######################### helpers class ###########################
+#notes: df is global and will not be changed
+class helpers():
+	def __init__(self, df):
+		print("Class 'helpers' created")
+		self.df = df
+
+    #Purpose: get subsets for columns
+    #Params: column name 
+    #Return: unique values to subset df
+	def getSubset(self, col):
+		if col == 'Latitude':
+			print(self.df[col]) # not done 
+		elif col == "Ocean":
+			vals = self.df[col].unique()
+			return vals[vals != 'NA']
+		elif col == 'Country':
+			#return all countries with more than 5 dives
+			counts = self.df[col].value_counts()
+			return counts[counts > 5].index.unique()
+
+    #Purpose: subset and aggregate data 
+    #Params: subset by region
+    #Return: self.df that is aggregated on day and given params 
+	def aggDF(self, region=None):
+		#gropu by value
+		temp = self.df.groupby(['Date']).mean()
+		print(temp)
+		return temp
+
     #Purpose: print unique values in column 
-    #Params: df, column(s) 
+    #Params: column(s) 
     #Return: NA 
-	def printUniqueCol(self, df, c):
+	def printUniqueCol(self, c):
 		#check if iterable
 		if type(c) == list:
 			if type(c[0]) == str:
 				for i in c:
-					print(str(i)+": "+str(df[i].unique().tolist()))
+					print(str(i)+": "+str(self.df[i].unique().tolist()))
 			elif type(c[0]) == int:
 				for i in c:
-					print(str(i)+": "+str(df.iloc[:,i].unique().tolist()))
+					print(str(i)+": "+str(self.df.iloc[:,i].unique().tolist()))
 			else:
 				print("Incorrect type 'printUniqueCol'")
 		#if not iterable
 		else:
 			if type(c) == str:
-				print(str(c)+": "+str(df[c].unique().tolist()))
+				print(str(c)+": "+str(self.df[c].unique().tolist()))
 			elif type(c) == int:
-				print(str(c)+": "+str(df.iloc[:,c].unique().tolist()))
+				print(str(c)+": "+str(self.df.iloc[:,c].unique().tolist()))
 			else:
 				print("Incorrect type 'printUniqueCol'")
 
-    #Purpose: subset and aggregate data 
-    #Params: data, subset by region
-    #Return: df that is aggregated on day and given params 
-	def aggDF(self, df, region=None):
-		#gropu by value
-		temp = df.groupby('Date')
-		print(temp[0])
-		return temp
+######################### analysis class ###########################
+#notes: df is global and will not be changed
+class analysis():
+	def __init__(self, df):
+		print("Class 'analysis' created")
+		self.df = df
+		self.h = helpers(self.df)
+
+	# Purpose: test if orgnaisms are bivariate normal
+	# Params: 
+	# Return: 
+	############### INCOMPLETE ####################
+	def bivariateNormalTest(self, df):
+		# get the data
+		n = len(COMMON_COLUMNS)
+
+
+		# get columns
+		a = np.array(df[COMMON_COLUMNS[2]])
+		b = np.array(df[COMMON_COLUMNS[3]])
+		print(a)
+		print(b)
+		temp = np.append(a,b)
+		print(temp.shape)
+		print(normaltest(temp))
+		
+		# set up return matrix
+		mat = np.empty([n,n])
+
+		# iterate through matrix
+		for i in range(n):
+			for j in range(n):
+				ci = df[COMMON_COLUMNS[i]]
+				cj = df[COMMON_COLUMNS[j]]
+				temp = pd.DataFrame([ci,cj])
+
+    #Purpose: analyze one vs. all correlation 
+    #Params: data frame, subset type keyword
+    #Return: pandas df with variance
+	def oneVsAllCorr(self, df, subsetType):
+		# setup return dict
+		returnDict = {}
+
+		# calcualte correlation matrix for all variables
+		temp = df[COMMON_COLUMNS]
+		self.correlationMatrix(temp, 'No Subset')		
+
+		# get data subset
+		for s in self.h.getSubset(subsetType):
+			# get subset
+			subsetDF = df[df[subsetType] == s][COMMON_COLUMNS]
+
+			# get correlation matrix
+			self.correlationMatrix(subsetDF, s+' Subset')
+
+		# divide each by correlation matrix for all variables
+
+    #Purpose: conduct analysis based on df subsets
+    #Params: type of analysis, subsets, cols to include
+    #Return: pandas df with variance
+	def subsetAnalysis(self, analysisType, colsToInclude, subset):
+		#create empty df
+		d = {}
+		for c in colsToInclude:
+			d[c] = np.array([]) 
+
+		#iterate through subsets
+		for s in self.h.getSubset(subset):
+			temp = self.df[self.df[subset] == s]
+
+			#iterate through all columns
+			for c in colsToInclude:
+				#calculate general vals
+				v = np.var(temp[c])
+				corrSubset = np.corrcoef(temp[c])
+
+				if analysisType == "one/all var":
+					#get other variances and return
+					totalVar = np.var(self.df[c])
+					relativeVar = v/totalVar
+
+					d[c] = np.append(d[c], relativeVar)
+
+				if analysisType == "one/all corr":
+					#get correlation
+					cors = self.df[colsToInclude].corr()
+					d[c] = cors.iloc[1:,:]
+
+		return pd.DataFrame(d, index=self.h.getSubset(subset))
 
     #Purpose: develop correlational matrix
-    #Params: data 
+    #Params: data frame for correlation matrix, graph title 
     #Return: NA 
-	def correlationMatrix(self, df):
-		#setup
-		df = df.iloc[:,160:]
-		labs = df.columns.values
-		mat = df.corr().values
+	def correlationMatrix(self, df, title):
+		#setup 
+		temp = df
+		labs = temp.columns.values
+		mat = temp.corr().values
 
 		#add annotations
 		annotations = go.Annotations()
@@ -194,7 +319,7 @@ class helpers():
 		
 		#develop layout
 		layout = go.Layout( 
-			title={"text": "Correlation Matrix"},
+			title={"text": title},
 			xaxis={"tickfont": {"size": 8}, "showgrid":False},
 			yaxis={"tickfont": {"size": 8}, "showgrid":False},
 			plot_bgcolor='grey',
@@ -202,11 +327,11 @@ class helpers():
 			annotations=annotations
 		)
 
-		#add data from df
+		#add data from temp
 		data = go.Heatmap(
 			type='heatmap',
-			x=df.columns.values,
-			y=df.columns.values,
+			x=temp.columns.values,
+			y=temp.columns.values,
 			z=mat,
 			colorscale='blues'
 		)
@@ -216,28 +341,104 @@ class helpers():
 		fig.show()
 
     #Purpose: develop bivariate plot matrix
-    #Params: data 
+    #Params: NA 
     #Return: NA 
-	def scatterMatrix(self, df, which):
+	def scatterMatrix(self, which):
 		#graph all combinations in groups of 5
 		#if which == 'all':
 			#iterate through all combinations by 5
-			#print(df.columns.values)
-			#for i in range(df.shape[1]):
+			#print(self.df.columns.values)
+			#for i in range(self.df.shape[1]):
 
 
-
-
-		fig = px.scatter_matrix(df.iloc[:,90:93])
+		fig = px.scatter_matrix(self.df.iloc[:,90:93])
 		fig.show()
 
-######################### run ###########################
-#create class instnaces
-h = helpers()
+    # Purpose: correlation hypothesis test
+    # Params: df 
+    # Return: NA
+	def correlationHypothesisTest(self, df):
+		# get all unqiue pairs and setup vars
+		uniquePairs = list(combinations(COMMON_COLUMNS, 2))
+		corrs = np.array([])
+		pVals = np.array([])
+		names = np.array([]) 
 
+		# get variable vectors to test
+		for a,b in uniquePairs:
+			temp = df[[a,b]].dropna()
+			c1, c2 = temp.iloc[:,0], temp.iloc[:,1]
+
+			# get hypothesis test for correlation	
+			r, pVal = stats.pearsonr(c1, c2)
+
+			# add to array
+			corrs = np.append(corrs, r)
+			pVals = np.append(pVals, pVal)
+			names = np.append(names, a+' --- '+b)
+
+		# perform benjamini hochberg correction
+		bools, adjustedVals, aS, aB = multi.multipletests(pVals, method='fdr_bh')
+
+		# print values for input into word
+		print('B-H Correction Sig.,Pearson R, Organism Pair')
+		for i in range(len(pVals)):
+			print(str(bools[i])+', '+str(round(corrs[i], 4))+', '+names[i])
+
+		# print(str(r)+', '+str(pVal)+': '+a+' | '+b)
+
+    # Purpose: perform a two sample indepent t test on correlation coefficient
+    # Params:  a, b, alpha, null hypothesis, alternative hypothesis 
+    # Return: (z-score, p-value) 
+	def tTest(self, a, b, alpha, hNull, hAlt):
+		# remove nas
+		temp = pd.DataFrame({'a':a,'b':b}).dropna()
+		a, b = temp['a'], temp['b']
+
+		# get stdev
+		stdev = np.stdev([a,b])
+		
+
+		# get stdev
+		stdev = np.sqrt((varA+varB)/2)
+
+		# get test stat
+		tStat = (np.mean(a)-np.mean(b))/(stdev/np.sqrt(2/n))
+
+		# calcalte degrees of freedom and get p-value
+		dof = 2*n-2
+		pVal = 1-stats.t.cdf(tStat,df=dof)
+
+		t2, p2 = stats.ttest_ind(a,b)
+		if pVal == p2:
+			return (tStat, pVal)
+		else:
+			print("incorrect p value")
+			return (t2, p2)
+
+######################### run ###########################
 #read in data
-df = h.readData()
-df = h.clean(df)
+df = cleaning().readData()
+#print(df.describe())
+#print(set(df['Errors?']))
+a = analysis(df)
+
+#analyze
+# ONE VS ALL VARIANCE
+#var = a.subsetAnalysis(analysisType='one/all var', colsToInclude=COMMON_COLUMNS, subset="Ocean")
+#print(var.apply(lambda x: np.mean(x), axis=0))
+#print(var.apply(lambda x: np.mean(x), axis=1))
+
+# BIVARIATE NORMAL TEST
+#a.bivariateNormalTest(df)
+
+# ONE VS ALL CORRELATION 
+#a.oneVsAllCorr(df, 'Ocean')
+
+# HYPOTHESIS TESSTING
+a.correlationHypothesisTest(df)
+
+#print(corrs) #NOT WORKING
 #print(h.aggDF(df))
 #h.printUniqueCol(df, NONSTATIC_DESCRIPTORS[31:len(NONSTATIC_DESCRIPTORS)])
 
@@ -245,3 +446,4 @@ df = h.clean(df)
 #h.correlationMatrix(df)
 #h.scatterMatrix(df, which='all')
 
+#dm.helpers().showDF(df, how='pivot')
