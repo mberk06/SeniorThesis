@@ -116,6 +116,10 @@ class helpers():
 		print("File saved as: "+FILENAME+".csv")
 
 		return df.dtypes
+	
+	def saveAsPickle(self, df):
+		# save as pickle
+		df.to_pickle(FILENAME)
 
 ############################# testing ###########################
 class testing():
@@ -170,8 +174,9 @@ class run():
 		#merge data
 		df = h.mergeData(data)
 
-		#save as csv
+		#save as csv and pickle
 		h.saveAsCSV(df)
+		h.saveAsPickle(df)
 
 		#visualize
 		if howShowData is not None:

@@ -113,8 +113,16 @@ class cleaning():
     #Purpose: read in data from dm
     #Params: NA 
     #Return: NA 
-	def readData(self):
-		df = dm.run().runIt(howShowData=None)
+	def readData(self, readPickle=True):
+		# read from pickle
+		if readPickle:
+			df = pd.read_pickle(dm.FILENAME)
+
+		# if shouldn't read from pickle
+		else:
+			df = dm.run().runIt(howShowData=None)
+		
+		# clean
 		return self.clean(df)
 	
     #Purpose: do extra cleaning (recode factors, remove outliers, etc.)
@@ -138,7 +146,7 @@ class cleaning():
 
 		#recode specific factors
 		df = df.replace('MED','MEDIUM')
-
+		
 		#recode all blachings to percentages
 		for c in ['Percent colonies bleached','Percent Bleaching','Percent of each colony']:
 			df[c] = df[c].apply(lambda x: str(x).replace('<',''))
@@ -148,11 +156,22 @@ class cleaning():
 		#columns to convert to numeric
 		colsToFloat = ['TRASH GENERAL','TRASH FISH NETS','CORAL DAMAGE OTHER','CORAL DAMAGE DYNAMITE',
 					   'CORAL DAMAGE ANCHOR','Percent colonies bleached','Percent Bleaching',
-					   'Percent of each colony']+ALL_ORGANISMS
+					   'Percent of each colony','Latitude Seconds','Latitude Minutes','Latitude Degrees',
+					   'Longitude Seconds','Longitude Minutes','Longitude Degrees']+ALL_ORGANISMS
 		for c in colsToFloat:
 			df[c] = pd.to_numeric(df[c], errors='coerce') #convert NA to NaN
-			df[c] = df[c].apply(lambda x : x*100 if x < 1 and x != 0 else x) #change decimals to percentages
-			df[c] = df[c].apply(lambda x : x/10 if x > 100 else x) #change decimals to percentages
+
+			# not for lat/lon
+			if 'Latitude' not in c and 'Longitude' not in c:
+				df[c] = df[c].apply(lambda x : x*100 if x < 1 and x != 0 else x) #change decimals to percentages
+				df[c] = df[c].apply(lambda x : x/10 if x > 100 else x) #change decimals to percentages
+
+		# recode lat, long
+		df['Lat'] = df['Latitude Seconds'].truediv(3600) + df['Latitude Minutes'].truediv(60) + df['Latitude Degrees'] # combine cols
+		df['Lon'] = df['Longitude Seconds'].truediv(3600) + df['Longitude Minutes'].truediv(60) + df['Longitude Degrees']
+
+		df.loc[df['Latitude Cardinal Direction'] == 'S', 'Lat'] *= -1 # convert to negative according to cardinal direction
+		df.loc[df['Longitude Cardinal Direction'] == 'W', 'Lon'] *= -1
 
 		return df
 
@@ -185,6 +204,7 @@ class helpers():
 		temp = self.df.groupby(['Date']).mean()
 		print(temp)
 		return temp
+
 
     #Purpose: print unique values in column 
     #Params: column(s) 
@@ -305,8 +325,9 @@ class analysis():
 	def correlationMatrix(self, df, title):
 		#setup 
 		temp = df
+		temp.replace(0, np.nan, inplace=True)
 		labs = temp.columns.values
-		mat = temp.corr().values
+		mat = temp.corr(min_periods=10).values # get correlation mat with minimum samples for calculation
 
 		#add annotations
 		annotations = go.Annotations()
@@ -340,18 +361,90 @@ class analysis():
 		fig = go.Figure(data=data, layout=layout)
 		fig.show()
 
-    #Purpose: develop bivariate plot matrix
-    #Params: NA 
-    #Return: NA 
-	def scatterMatrix(self, which):
-		#graph all combinations in groups of 5
-		#if which == 'all':
-			#iterate through all combinations by 5
-			#print(self.df.columns.values)
-			#for i in range(self.df.shape[1]):
+	def scatterMatrix(self, df):
+		"""Create and show a scatter matrix with the given columns 
 
+		Params
+			df: data with subsetted values to graph (pd.DataFrame)	
 
-		fig = px.scatter_matrix(self.df.iloc[:,90:93])
+		Return: 
+			NA 
+		"""
+		# remove 0s
+		localDF = df[columns].dropna()
+
+		# create scatter matrix and show
+		fig = px.scatter_matrix(localDF)
+		fig.show()
+
+	def drop_numerical_outliers(df, z_thresh=3):
+		# Source: https://stackoverflow.com/questions/23199796/detect-and-exclude-outliers-in-pandas-data-frame
+		# Constrains will contain `True` or `False` depending on if it is a value below the threshold.
+		constrains = df.select_dtypes(include=[np.number]) \
+			.apply(lambda x: np.abs(stats.zscore(x)) < z_thresh, reduce=False) \
+			.all(axis=1)
+		# Drop (inplace) values set to be rejected
+		df.drop(df.index[~constrains], inplace=True)
+
+		return df
+		
+	def scatterPlot(self, df, c):
+		"""Create and show a scatter plot between two variables
+
+		Params
+			df: data with values to graph (pd.DataFrame)	
+			c: columns to subset (string list)
+
+		Return: 
+			NA 
+		"""
+		# make local changes to df
+		localDF = df.copy()[c]
+
+		# remove outliers
+		c1, c2 = localDF.iloc[:,0], localDF.iloc[:,1]
+		c1 = c1[c1.between(c1.quantile(.05), c1.quantile(.95))] # without outliers
+		c2 = c2[c2.between(c2.quantile(.05), c2.quantile(.95))] # without outliers
+
+		localDF.iloc[:,0], localDF.iloc[:,1] = c1, c2
+		
+		#localDF = self.drop_numerical_outliers(localDF)
+
+		# remove 0s
+		localDF[c] = localDF[c].replace(0, np.nan) # remove 0s
+		#localDF = np.sqrt(localDF[c]).dropna()
+		localDF = localDF[c].dropna()
+
+		# setup names
+		x, y = localDF.columns.values
+		tempDict = {x:np.array([]),
+				 y:np.array([])}
+
+		for i in localDF[x].unique():
+			sub = localDF[localDF[x] == i][y]
+			tempDict[x] = np.append(tempDict[x], i)
+			tempDict[y] = np.append(tempDict[y], np.mean(sub))
+
+		tempDF = pd.DataFrame(tempDict)
+	
+		# create and show plot
+		fig = px.scatter(tempDF, x=c[0], y=c[1], trendline="ols")
+		fig.show()
+		
+		# get trend line information
+		results = px.get_trendline_results(fig)
+		summary = results.px_fit_results.iloc[0].summary()
+		print(summary)
+
+    # Purpose: histogram of column values 
+    # Params: column name 
+    # Return: NA
+	def columnHist(self, c):
+		#create local df
+		localDF = self.df
+		localDF[c] = localDF[c][localDF[c] > 0]
+
+		fig = px.histogram(localDF, x=c)
 		fig.show()
 
     # Purpose: correlation hypothesis test
@@ -416,6 +509,29 @@ class analysis():
 			print("incorrect p value")
 			return (t2, p2)
 
+    #Purpose: map points according to lat, long
+    #Params: 
+    #Return: NA 
+	def map(self):
+		# create figure
+		fig = px.scatter_mapbox(self.df, lat="Lat", lon="Lon", hover_name="Reef Name",
+                        color_discrete_sequence=["red"], zoom=3)
+
+		# update background
+		fig.update_layout(
+			mapbox_style="white-bg",
+			mapbox_layers=[
+				{
+					"below": 'traces',
+					"sourcetype": "raster",
+					"source": [
+						"https://basemap.nationalmap.gov/arcgis/rest/services/USGSImageryOnly/MapServer/tile/{z}/{y}/{x}"
+					]
+				}
+			  ])
+		fig.update_layout(margin={"r":0,"t":0,"l":0,"b":0})
+		fig.show()
+
 ######################### run ###########################
 #read in data
 df = cleaning().readData()
@@ -436,7 +552,20 @@ a = analysis(df)
 #a.oneVsAllCorr(df, 'Ocean')
 
 # HYPOTHESIS TESSTING
-a.correlationHypothesisTest(df)
+#a.correlationHypothesisTest(df)
+
+# MAPING
+#a.map()
+
+# SCATTER MATRIX
+#a.scatterMatrix(df[COMMON_COLUMNS[1:5]])
+
+# SCATTER PLOT
+a.scatterPlot(df[df['Ocean'] == 'PACIFIC'], ['PARROTFISH','DIADEMA'])
+
+# histogram counts
+#for c in COMMON_COLUMNS:
+#	a.columnHist(c)
 
 #print(corrs) #NOT WORKING
 #print(h.aggDF(df))
