@@ -87,10 +87,9 @@ class helpers():
 	
 		return df
 	
-	#Purpose: do a vatiety of cleaning tasks on data
-	#Params: dirty df
-	#Return: cleaned DB
 	def cleanData(self, df):
+		"""Perform a variety of cleaning tasks and return clean df. Tasks involve reshaping data, recoding columns, and changing data types."""
+
 		#remove Time of day work began, Time of day work ended (all the same value)
 		df = df.drop(['Time of day work began', 'Time of day work ended'], axis=1)
 
@@ -102,23 +101,63 @@ class helpers():
 
 		#strip whitespace if string
 		df = df.applymap(lambda c: c.strip() if isinstance(c, str) else c)
+	
+		#remove errors
+		df = df[df['Errors?'] != 'VERDADERO']
+		
+		#recode to NA
+		df = df.replace([np.nan, 'nan', 'NAN', float('nan')], 'NA', regex=True)
+
+		#variables to recode
+		factorCols = ['Dynamite Fishing?','Sewage pollution']
+		factorVals = ['NA','YES','NO','HIGH','MEDIUM','LOW','NONE','MODERATE','PRIOR',
+					  'FALSO','VERDADERO','TRUE','FALSE']
+
+		#iterate through vars
+		for c in factorCols:
+			df[c] = df[c].replace([x for x in df[c] if x not in factorVals], 'NA')
+
+		#recode specific factors
+		df = df.replace('MED','MEDIUM')
+		
+		#recode all blachings to percentages
+		for c in ['Percent colonies bleached','Percent Bleaching','Percent of each colony']:
+			df[c] = df[c].apply(lambda x: str(x).replace('<',''))
+			df[c] = df[c].apply(lambda x: str(x).replace('>',''))
+			df[c] = df[c].apply(lambda x: str(x).replace('%',''))
+
+		#columns to convert to numeric
+		colsToFloat = ['TRASH GENERAL','TRASH FISH NETS','CORAL DAMAGE OTHER','CORAL DAMAGE DYNAMITE',
+					   'CORAL DAMAGE ANCHOR','Percent colonies bleached','Percent Bleaching',
+					   'Percent of each colony','Latitude Seconds','Latitude Minutes','Latitude Degrees',
+					   'Longitude Seconds','Longitude Minutes','Longitude Degrees']+ALL_ORGANISMS
+		for c in colsToFloat:
+			df[c] = pd.to_numeric(df[c], errors='coerce') #convert NA to NaN
+
+			# not for lat/lon
+			if 'Latitude' not in c and 'Longitude' not in c:
+				df[c] = df[c].apply(lambda x : x*100 if x < 1 and x != 0 else x) #change decimals to percentages
+				df[c] = df[c].apply(lambda x : x/10 if x > 100 else x) #change decimals to percentages
+
+		# recode lat, long
+		df['Lat'] = df['Latitude Seconds'].truediv(3600) + df['Latitude Minutes'].truediv(60) + df['Latitude Degrees'] # combine cols
+		df['Lon'] = df['Longitude Seconds'].truediv(3600) + df['Longitude Minutes'].truediv(60) + df['Longitude Degrees']
+
+		df.loc[df['Latitude Cardinal Direction'] == 'S', 'Lat'] *= -1 # convert to negative according to cardinal direction
+		df.loc[df['Longitude Cardinal Direction'] == 'W', 'Lon'] *= -1
 
 		return df
 
-	#Purpose: write to csv
-	#Params: df 
-	#Return: df datatypes (to be accessed by TrendAnalysis.py)
 	def saveAsCSV(self, df):
+		"""Save df as csv."""
+
 		f = open(FILENAME+'.csv','w')
 		f.write(df.to_csv(index=True))
 		f.close()
-
-		print("File saved as: "+FILENAME+".csv")
-
-		return df.dtypes
 	
 	def saveAsPickle(self, df):
-		# save as pickle
+		"""Save df as pickle."""
+
 		df.to_pickle(FILENAME)
 
 ############################# testing ###########################

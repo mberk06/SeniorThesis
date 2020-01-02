@@ -125,56 +125,6 @@ class cleaning():
 		# clean
 		return self.clean(df)
 	
-    #Purpose: do extra cleaning (recode factors, remove outliers, etc.)
-    #Params: df 
-    #Return: clean df 
-	def clean(self, df):
-		#remove errors
-		df = df[df['Errors?'] != 'VERDADERO']
-		
-		#recode to NA
-		df = df.replace([np.nan, 'nan', 'NAN', float('nan')], 'NA', regex=True)
-
-		#variables to recode
-		factorCols = ['Dynamite Fishing?','Sewage pollution']
-		factorVals = ['NA','YES','NO','HIGH','MEDIUM','LOW','NONE','MODERATE','PRIOR',
-					  'FALSO','VERDADERO','TRUE','FALSE']
-
-		#iterate through vars
-		for c in factorCols:
-			df[c] = df[c].replace([x for x in df[c] if x not in factorVals], 'NA')
-
-		#recode specific factors
-		df = df.replace('MED','MEDIUM')
-		
-		#recode all blachings to percentages
-		for c in ['Percent colonies bleached','Percent Bleaching','Percent of each colony']:
-			df[c] = df[c].apply(lambda x: str(x).replace('<',''))
-			df[c] = df[c].apply(lambda x: str(x).replace('>',''))
-			df[c] = df[c].apply(lambda x: str(x).replace('%',''))
-
-		#columns to convert to numeric
-		colsToFloat = ['TRASH GENERAL','TRASH FISH NETS','CORAL DAMAGE OTHER','CORAL DAMAGE DYNAMITE',
-					   'CORAL DAMAGE ANCHOR','Percent colonies bleached','Percent Bleaching',
-					   'Percent of each colony','Latitude Seconds','Latitude Minutes','Latitude Degrees',
-					   'Longitude Seconds','Longitude Minutes','Longitude Degrees']+ALL_ORGANISMS
-		for c in colsToFloat:
-			df[c] = pd.to_numeric(df[c], errors='coerce') #convert NA to NaN
-
-			# not for lat/lon
-			if 'Latitude' not in c and 'Longitude' not in c:
-				df[c] = df[c].apply(lambda x : x*100 if x < 1 and x != 0 else x) #change decimals to percentages
-				df[c] = df[c].apply(lambda x : x/10 if x > 100 else x) #change decimals to percentages
-
-		# recode lat, long
-		df['Lat'] = df['Latitude Seconds'].truediv(3600) + df['Latitude Minutes'].truediv(60) + df['Latitude Degrees'] # combine cols
-		df['Lon'] = df['Longitude Seconds'].truediv(3600) + df['Longitude Minutes'].truediv(60) + df['Longitude Degrees']
-
-		df.loc[df['Latitude Cardinal Direction'] == 'S', 'Lat'] *= -1 # convert to negative according to cardinal direction
-		df.loc[df['Longitude Cardinal Direction'] == 'W', 'Lon'] *= -1
-
-		return df
-
 ######################### helpers class ###########################
 #notes: df is global and will not be changed
 class helpers():
@@ -236,6 +186,10 @@ class analysis():
 		print("Class 'analysis' created")
 		self.df = df
 		self.h = helpers(self.df)
+
+		#setup for printing
+        pd.set_option('display.max_rows', 500)
+        pd.set_option('display.max_columns', 500)
 
 	# Purpose: test if orgnaisms are bivariate normal
 	# Params: 
@@ -403,8 +357,8 @@ class analysis():
 
 		# remove outliers
 		c1, c2 = localDF.iloc[:,0], localDF.iloc[:,1]
-		c1 = c1[c1.between(c1.quantile(.05), c1.quantile(.95))] # without outliers
-		c2 = c2[c2.between(c2.quantile(.05), c2.quantile(.95))] # without outliers
+		c1 = c1[c1.between(c1.quantile(.0), c1.quantile(.95))] # without outliers
+		c2 = c2[c2.between(c2.quantile(.0), c2.quantile(.95))] # without outliers
 
 		localDF.iloc[:,0], localDF.iloc[:,1] = c1, c2
 		
@@ -561,7 +515,8 @@ a = analysis(df)
 #a.scatterMatrix(df[COMMON_COLUMNS[1:5]])
 
 # SCATTER PLOT
-a.scatterPlot(df[df['Ocean'] == 'PACIFIC'], ['PARROTFISH','DIADEMA'])
+#a.scatterPlot(df[df['Ocean'] == 'RED SEA'], ['PARROTFISH','DIADEMA'])
+a.scatterPlot(df, ['PARROTFISH','DIADEMA'])
 
 # histogram counts
 #for c in COMMON_COLUMNS:
