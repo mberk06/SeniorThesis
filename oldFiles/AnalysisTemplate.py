@@ -1,8 +1,8 @@
 """
-	Author: Michael Berk
+	Author: Michael Berk 
 	Date: Spring 2020
 	Description:
-		- file where analyis is conducted on RC data by calling functions from other files
+		- 
 
 """
 
@@ -19,13 +19,12 @@ from Subsets import SUBSETS
 import AnalysisHelpers 
 
 # create local example of class 
-h = AnalysisHelpers.helpers()
+v = AnalysisHelpers.visualizations()
+d = AnalysisHelpers.data()
+s = AnalysisHelpers.stats()
 
 ##################################
 ##################################
-# RUN
+# Analaysis Code 
 ##################################
 ##################################
-df = h.readData()
-h.getSubset(df, col='Ocean')
-
