@@ -110,6 +110,7 @@ SUBSETS.DIVE_DESCRIPTORS = ['Depth','Time of day work began','Time of day work e
 					'Any major storms in last years?','When storms?','Overall anthro impact?',
 					'What kind of impacts?']
 
+SUBSETS.SUBSTRATE = ['HC','NI','OT','RB','RC','SC','SD','SI','SP','RK','FS']
 
 ############################################
 ############################################

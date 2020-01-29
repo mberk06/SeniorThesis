@@ -60,9 +60,7 @@ class summary():
 # create class
 ss = summary()
 
-# test merge 
-v.showDF(df, how='pivot')
-
+######## COMMON COLUMNS #############
 # VIOLIN PLOTS
 #for x in SUBSETS.COMMON_COLUMNS:
 #    ss.violinPlotAnalysis(x)
@@ -71,4 +69,12 @@ v.showDF(df, how='pivot')
 #for x in SUBSETS.COMMON_COLUMNS:
 #    ss.histogramAnalysis(x)
 
-# SUMMER vs. WINTER temperatures
+######## COMMON COLUMNS PERCENTILE #############
+# VIOLIN PLOTS
+for x in SUBSETS.COMMON_COLUMNS:
+    print(x)
+    ss.violinPlotAnalysis(x+'_PERCENTILE')
+
+# HISTOGRAMS
+for x in SUBSETS.COMMON_COLUMNS:
+    ss.histogramAnalysis(x+'_PERCENTILE')

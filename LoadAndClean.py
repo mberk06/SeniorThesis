@@ -128,7 +128,7 @@ class data():
             df[c] = df[c].apply(lambda x: str(x).replace('%',''))
 
         # columns to convert to numeric
-        colsToFloat = ['TRASH GENERAL','TRASH FISH NETS','CORAL DAMAGE OTHER','CORAL DAMAGE DYNAMITE',
+        colsToFloat = ['TRASH GENERAL','Water temp at 5m','TRASH FISH NETS','CORAL DAMAGE OTHER','CORAL DAMAGE DYNAMITE',
                        'CORAL DAMAGE ANCHOR','Percent colonies bleached','Percent Bleaching',
                        'Percent of each colony','Latitude Seconds','Latitude Minutes','Latitude Degrees',
                        'Longitude Seconds','Longitude Minutes','Longitude Degrees']+SUBSETS.ALL_ORGANISMS
@@ -165,7 +165,10 @@ class data():
         """Get quantiles for all organism counts, subsetting for ocean. Note that rank() ignores NAs."""
 
         # specify cols to add 
-        cols = [o+"_PERCENTILE" for o in SUBSETS.ALL_ORGANISMS]
+        colsToInclude = set(SUBSETS.COMMON_COLUMNS+SUBSETS.ALL_ORGANISMS+SUBSETS.SUBSTRATE)
+
+        # format new cols
+        cols = [o+"_PERCENTILE" for o in colsToInclude]
 
         # add blank columns 
         for c in cols: df[c] = np.nan
@@ -173,7 +176,7 @@ class data():
         # iterate thorugh oceans
         for ocean in SUBSETS.OCEANS:
             # iterate through all organisms
-            for o in SUBSETS.ALL_ORGANISMS:
+            for o in colsToInclude:
                 # get percentile for each organism 
                 per = df.loc[df.Ocean == ocean, o].rank(pct=True)
 
@@ -189,7 +192,7 @@ class data():
         """Specify if summer or winter (cutoff Sep/Oct and March/April)."""
 
         # create empty column
-        df['season'] = ''
+        df['season'] = None
 
         # sort by reef id
         df = df.sort_values(by="Reef ID")
@@ -203,25 +206,23 @@ class data():
             # get reef subset
             temp = df.loc[df['Reef ID'] == r,:]
 
+            # subset data
+            sub1 = temp.loc[temp['Month'].isin(m1), 'Water temp at 5m']
+            sub2 = temp.loc[temp['Month'].isin(m2), 'Water temp at 5m']
+
             # get summer and winter months temps
-            print(temp.Month)
-            print(m1)
-            temp1 = np.nanmean(temp.loc[df.Month.isin(m1), 'Water temp at 5m'])
-            temp2 = np.nanmean(temp.loc[df.Month.isin(m2), 'Water temp at 5m'])
+            mean1 = np.nanmean(sub1.values) if sub1.shape[0] > 0 else np.nan
+            mean2 = np.nanmean(sub2.values) if sub2.shape[0] > 0 else np.nan
 
             # if sub1 is warmer
-            if temp1 > temp2:
-                df.loc[df.Month.isin(m1) and df['Reef ID'] == r, 'season'] = 'warm'
-                df.loc[df.Month.isin(m2) and df['Reef ID'] == r, 'season'] = 'cold'
+            if mean1 > mean2:
+                df.loc[(df['Month'].isin(m1)) & (df['Reef ID'] == r), 'season'] = 'warm'
+                df.loc[(df['Month'].isin(m2)) & (df['Reef ID'] == r), 'season'] = 'cold'
             else:
-                df.loc[df.Month in m2 and df['Reef ID'] == r, 'season'] = 'warm'
-                df.loc[df.Month in m1 and df['Reef ID'] == r, 'season'] = 'cold'
+                df.loc[(df['Month'].isin(m2)) & (df['Reef ID'] == r), 'season'] = 'warm'
+                df.loc[(df['Month'].isin(m1)) & (df['Reef ID'] == r), 'season'] = 'cold'
 
         return df
-
-
-
-
 
     def save(self, df):
         """Save df as csv and pickle file."""
